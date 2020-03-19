@@ -10,7 +10,7 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-func Track(device, dst string, promiscuos bool) {
+func Track(device, src, dst string, promiscuos bool) {
 
 	var snaphotLen int32
 
@@ -35,11 +35,24 @@ func Track(device, dst string, promiscuos bool) {
 		}
 
 		ip, _ := ipLayer.(*layers.IPv4)
-		dstIP := fmt.Sprintf("%s", ip.DstIP)
 
-		if dstIP == dst {
-			fmt.Printf("From %s to %s\n", ip.SrcIP, ip.DstIP)
-			fmt.Println("Protocol : ", ip.Protocol)
+		if src != "" {
+			srcIP := fmt.Sprintf("%s", ip.SrcIP)
+
+			if srcIP == src {
+				fmt.Printf("From %s to %s\n", ip.SrcIP, ip.DstIP)
+			}
 		}
+
+		if dst != "" {
+
+			dstIP := fmt.Sprintf("%s", ip.DstIP)
+
+			if dstIP == dst {
+				fmt.Printf("From %s to %s\n", ip.SrcIP, ip.DstIP)
+			}
+		}
+
+		fmt.Println("Protocol : ", ip.Protocol)
 	}
 }
