@@ -3,6 +3,8 @@ package capture
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/google/gopacket"
@@ -10,7 +12,65 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-func Track(device, src, dst string, promiscuos bool) {
+type Tracker struct {
+	message string
+}
+
+func NewTracker() *Tracker {
+	tracker := Tracker{}
+	tracker.message = ""
+	return &tracker
+}
+
+func (t *Tracker) Track(device, src, dst string, promiscuos bool, savePath string) {
+
+	killSignal := make(chan os.Signal, 1)
+	signal.Notify(killSignal, os.Interrupt)
+
+	go t.track(device, src, dst, promiscuos)
+	<-killSignal
+
+	if t.message != "" {
+		fmt.Println("Saving the message")
+
+	}
+
+	if t.save(savePath) == false {
+		fmt.Println("Failed to save data")
+	}
+
+	fmt.Println("data saved")
+}
+
+func (t *Tracker) save(dstPath string) bool {
+
+	if t.message == "" {
+		fmt.Println("No packet message to save")
+		return false
+	}
+
+	f, err := os.Create(dstPath)
+
+	if err != nil {
+		fmt.Println("Error creating a file to save the message")
+		fmt.Println(err)
+		return false
+	}
+
+	n, err := f.Write([]byte(t.message))
+
+	if err != nil {
+		fmt.Println("Error writting the message to the dst")
+		fmt.Println(err)
+		return false
+	}
+
+	fmt.Printf("wrote %d bytes.\n", n)
+	return true
+
+}
+
+func (t *Tracker) track(device, src, dst string, promiscuos bool) {
 
 	var snaphotLen int32
 
@@ -26,6 +86,9 @@ func Track(device, src, dst string, promiscuos bool) {
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 
+	channel := make(chan os.Signal, 1)
+	signal.Notify(channel, os.Interrupt)
+
 	for packet := range packetSource.Packets() {
 
 		ipLayer := packet.Layer(layers.LayerTypeIPv4)
@@ -36,11 +99,14 @@ func Track(device, src, dst string, promiscuos bool) {
 
 		ip, _ := ipLayer.(*layers.IPv4)
 
+		str := ""
+
 		if src != "" {
 			srcIP := fmt.Sprintf("%s", ip.SrcIP)
 
 			if srcIP == src {
-				fmt.Printf("From %s to %s\n", ip.SrcIP, ip.DstIP)
+				str = fmt.Sprintf("From %s to %s\n", ip.SrcIP, ip.DstIP)
+				fmt.Println(str)
 			}
 		}
 
@@ -49,10 +115,16 @@ func Track(device, src, dst string, promiscuos bool) {
 			dstIP := fmt.Sprintf("%s", ip.DstIP)
 
 			if dstIP == dst {
-				fmt.Printf("From %s to %s\n", ip.SrcIP, ip.DstIP)
+				str = fmt.Sprintf("From %s to %s\n", ip.SrcIP, ip.DstIP)
+				fmt.Println(str)
 			}
 		}
 
-		fmt.Println("Protocol : ", ip.Protocol)
+		if str == "" {
+			continue
+		}
+
+		t.message += str
 	}
+
 }
